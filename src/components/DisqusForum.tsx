@@ -71,18 +71,22 @@ export function DisqusForum({ pageUrl, pageIdentifier = 'sunnysg-main-community'
     };
 
     // 2. Load or reset Disqus
-    let timer: NodeJS.Timeout;
+    let timer: any;
     try {
       if ((window as any).DISQUS) {
-        (window as any).DISQUS.reset({
-          reload: true,
-          config: function (this: any) {
-            this.page.url = currentCanonicalUrl;
-            this.page.identifier = pageIdentifier;
-            this.page.title = 'Sunny SG Community & Live Travel Discussion';
-          }
-        });
-        setDisqusStatus('loaded');
+        try {
+          (window as any).DISQUS.reset({
+            reload: true,
+            config: function (this: any) {
+              this.page.url = currentCanonicalUrl;
+              this.page.identifier = pageIdentifier;
+              this.page.title = 'Sunny SG Community & Live Travel Discussion';
+            }
+          });
+          setDisqusStatus('loaded');
+        } catch {
+          // ignore disqus reset errors
+        }
       } else {
         const d = document;
         let s = d.getElementById('disqus-embed-script') as HTMLScriptElement | null;
@@ -90,6 +94,8 @@ export function DisqusForum({ pageUrl, pageIdentifier = 'sunnysg-main-community'
           s = d.createElement('script');
           s.id = 'disqus-embed-script';
           s.src = 'https://sunnysg.disqus.com/embed.js';
+          s.async = true;
+          s.crossOrigin = 'anonymous';
           s.setAttribute('data-timestamp', String(+new Date()));
           s.onload = () => setDisqusStatus('loaded');
           s.onerror = () => setDisqusStatus('blocked');
@@ -97,7 +103,7 @@ export function DisqusForum({ pageUrl, pageIdentifier = 'sunnysg-main-community'
         }
       }
 
-      // Check if Disqus iframe loaded within 3.5 seconds (detect adblock / privacy blocking)
+      // Check if Disqus iframe loaded within 3.5 seconds
       timer = setTimeout(() => {
         const iframe = document.querySelector('#disqus_thread iframe');
         if (iframe) {
