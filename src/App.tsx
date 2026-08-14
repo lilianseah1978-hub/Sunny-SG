@@ -8,6 +8,7 @@ import { InteractiveMap } from './components/InteractiveMap';
 import { AIConciergeView } from './components/AIConciergeView';
 import { AttractionModal } from './components/AttractionModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
+import { DisqusForum } from './components/DisqusForum';
 import { Attraction, GeneratedItinerary, WeatherCondition, SubscriptionTier } from './types';
 import { ATTRACTIONS_DATA, MOCK_LIVE_WEATHER } from './data/singaporeData';
 import { Sparkles, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
@@ -350,6 +351,9 @@ export default function App() {
         {activeTab === 'concierge' && (
           <AIConciergeView currentWeather={weather} />
         )}
+
+        {/* Community & Traveler Discussion Forum (Disqus) */}
+        <DisqusForum pageIdentifier="sunnysg-main-discussion" />
       </main>
 
       {/* Attraction Detail Modal */}
