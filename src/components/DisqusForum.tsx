@@ -108,11 +108,11 @@ export function DisqusForum({ pageUrl, pageIdentifier = 'sunnysg-main-community'
       setDisqusStatus('blocked');
     }
 
-    // 3. Load Comment Count Script
+    // 3. Ensure Comment Count Script is present
     if (!document.getElementById('dsq-count-scr')) {
       const countScript = document.createElement('script');
       countScript.id = 'dsq-count-scr';
-      countScript.src = '//sunnysg.disqus.com/count.js';
+      countScript.src = 'https://sunnysg.disqus.com/count.js';
       countScript.async = true;
       (document.head || document.body).appendChild(countScript);
     }
