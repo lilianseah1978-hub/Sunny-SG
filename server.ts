@@ -215,67 +215,269 @@ app.get('/api/onemap/route', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// Live Weather API (Data.gov.sg / NEA + Fallback)
+// Live Singapore Weather & Environment APIs (Data.gov.sg v2 Host)
+// Keyless, Live, Wrapped Responses
+// -------------------------------------------------------------
+
+// 1. Two-Hour Forecast API
+app.get('/api/weather/two-hr-forecast', async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg two-hr-forecast returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Twenty-Four-Hour Forecast API
+app.get(['/api/weather/twenty-four-hr-forecast', '/api/weather/24hr'], async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/twenty-four-hr-forecast', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg twenty-four-hr-forecast returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Air Temperature API
+app.get('/api/weather/air-temperature', async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/air-temperature', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg air-temperature returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Rainfall API
+app.get('/api/weather/rainfall', async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/rainfall', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg rainfall returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. PSI (Pollutant Standards Index & PM2.5) API
+app.get('/api/weather/psi', async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/psi', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg psi returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. UV Index API
+app.get('/api/weather/uv', async (req, res) => {
+  try {
+    const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/uv', {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return res.json(data);
+    }
+    res.status(resp.status).json({ error: `Data.gov.sg uv returned HTTP ${resp.status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Live Consolidated Weather API (Aggregated from all 6 Data.gov.sg v2 endpoints)
 // -------------------------------------------------------------
 app.get('/api/weather', async (req, res) => {
   try {
     const areaQuery = (req.query.area as string) || 'Marina Bay';
     
-    // Try fetching live 2-hour forecast from Data.gov.sg
-    let liveForecasts: Record<string, string> = {};
-    try {
-      const resp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast', {
+    // Fetch all 6 live NEA / Data.gov.sg v2 feeds in parallel
+    const [twoHrRes, twentyFourHrRes, tempRes, rainRes, psiRes, uvRes] = await Promise.allSettled([
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast', {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(3500)
-      });
-      if (resp.ok) {
-        const json = await resp.json();
+      }),
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/twenty-four-hr-forecast', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      }),
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/air-temperature', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      }),
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/rainfall', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      }),
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/psi', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      }),
+      fetch('https://api-open.data.gov.sg/v2/real-time/api/uv', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      })
+    ]);
+
+    // 1. Process 2-hour forecasts
+    let liveForecasts: Record<string, string> = {};
+    if (twoHrRes.status === 'fulfilled' && twoHrRes.value.ok) {
+      try {
+        const json = await twoHrRes.value.json();
         const items = json?.data?.items?.[0]?.forecasts;
         if (Array.isArray(items)) {
           for (const item of items) {
             liveForecasts[item.area] = item.forecast;
           }
         }
+      } catch {
+        // continue
       }
-    } catch {
-      // Continue to fallback
     }
 
-    // Try fetching temperature
+    // 2. Process 24-hour forecast
+    let general24HrForecast = '';
+    let humidity24Hr = { low: 65, high: 90 };
+    let tempRange24Hr = { low: 25, high: 33 };
+    if (twentyFourHrRes.status === 'fulfilled' && twentyFourHrRes.value.ok) {
+      try {
+        const json = await twentyFourHrRes.value.json();
+        const item = json?.data?.records?.[0]?.general || json?.data?.items?.[0]?.general;
+        if (item) {
+          general24HrForecast = item.forecast?.text || item.forecast || '';
+          if (item.relative_humidity) {
+            humidity24Hr = { low: item.relative_humidity.low || 65, high: item.relative_humidity.high || 90 };
+          }
+          if (item.temperature) {
+            tempRange24Hr = { low: item.temperature.low || 25, high: item.temperature.high || 33 };
+          }
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    // 3. Process Live Air Temperature
     let liveTemp = 31.0;
-    try {
-      const tempResp = await fetch('https://api-open.data.gov.sg/v2/real-time/api/air-temperature', {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(3000)
-      });
-      if (tempResp.ok) {
-        const tempJson = await tempResp.json();
+    if (tempRes.status === 'fulfilled' && tempRes.value.ok) {
+      try {
+        const tempJson = await tempRes.value.json();
         const readings = tempJson?.data?.readings?.[0]?.data;
         if (Array.isArray(readings) && readings.length > 0) {
-          const avg = readings.reduce((acc: number, curr: { value: number }) => acc + (curr.value || 30), 0) / readings.length;
-          liveTemp = Math.round(avg * 10) / 10;
+          const validReadings = readings.filter((r: { value: number }) => typeof r.value === 'number' && r.value > 0);
+          if (validReadings.length > 0) {
+            const avg = validReadings.reduce((acc: number, curr: { value: number }) => acc + curr.value, 0) / validReadings.length;
+            liveTemp = Math.round(avg * 10) / 10;
+          }
         }
+      } catch {
+        // continue
       }
-    } catch {
-      // Use standard tropical average
+    }
+
+    // 4. Process Live Rainfall
+    let liveRainfallMm = 0.0;
+    if (rainRes.status === 'fulfilled' && rainRes.value.ok) {
+      try {
+        const rainJson = await rainRes.value.json();
+        const readings = rainJson?.data?.readings?.[0]?.data;
+        if (Array.isArray(readings) && readings.length > 0) {
+          const maxRain = Math.max(...readings.map((r: { value: number }) => r.value || 0));
+          liveRainfallMm = Math.max(0, Math.round(maxRain * 10) / 10);
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    // 5. Process Live PSI & PM2.5
+    let livePsi = 42;
+    let livePm25 = 11;
+    if (psiRes.status === 'fulfilled' && psiRes.value.ok) {
+      try {
+        const psiJson = await psiRes.value.json();
+        const readings = psiJson?.data?.items?.[0]?.readings;
+        if (readings) {
+          livePsi = readings.psi_twenty_four_hourly?.national || readings.psi_twenty_four_hourly?.central || 42;
+          livePm25 = readings.pm25_one_hourly?.national || readings.pm25_one_hourly?.central || 11;
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    // 6. Process Live UV Index
+    let liveUvIndex = liveTemp > 31 ? 8 : 6;
+    if (uvRes.status === 'fulfilled' && uvRes.value.ok) {
+      try {
+        const uvJson = await uvRes.value.json();
+        const records = uvJson?.data?.records?.[0]?.index || uvJson?.data?.items?.[0]?.index;
+        if (Array.isArray(records) && records.length > 0) {
+          const latest = records[records.length - 1];
+          if (latest && typeof latest.value === 'number') {
+            liveUvIndex = latest.value;
+          }
+        }
+      } catch {
+        // continue
+      }
     }
 
     const matchedWeather = MOCK_LIVE_WEATHER[areaQuery] || MOCK_LIVE_WEATHER['Marina Bay'];
     const currentForecast = liveForecasts[areaQuery] || liveForecasts['City'] || matchedWeather.forecast;
 
-    const isRain = /rain|shower|thundery/i.test(currentForecast);
+    const isRain = /rain|shower|thundery/i.test(currentForecast) || liveRainfallMm > 0.5;
     const rainRisk = isRain ? 'heavy' : (/cloud|overcast/i.test(currentForecast) ? 'moderate' : 'low');
 
     const result = {
       area: areaQuery,
       forecast: currentForecast,
+      general24HrForecast: general24HrForecast || currentForecast,
       temperature: liveTemp,
-      relativeHumidity: isRain ? 88 : 73,
-      rainfallMm: isRain ? 4.8 : 0.0,
-      uvIndex: isRain ? 3 : (liveTemp > 31 ? 8 : 6),
-      psi: 42,
-      pm25: 11,
-      lightningAlert: isRain,
+      tempRange24Hr,
+      relativeHumidity: isRain ? (humidity24Hr.high || 88) : (humidity24Hr.low || 73),
+      rainfallMm: liveRainfallMm > 0 ? liveRainfallMm : (isRain ? 3.5 : 0.0),
+      uvIndex: isRain ? Math.min(3, liveUvIndex) : liveUvIndex,
+      psi: livePsi,
+      pm25: livePm25,
+      lightningAlert: /thundery/i.test(currentForecast) || (isRain && liveRainfallMm > 5),
       rainRisk,
       icon: isRain ? 'cloud-rain' : (currentForecast.includes('Cloud') ? 'sun-cloud' : 'sun'),
       allAreas: {

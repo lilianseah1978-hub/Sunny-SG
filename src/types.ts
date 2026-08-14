@@ -42,7 +42,9 @@ export interface Attraction {
 export interface WeatherCondition {
   area: string;
   forecast: string;
+  general24HrForecast?: string;
   temperature: number;
+  tempRange24Hr?: { low: number; high: number };
   relativeHumidity: number;
   rainfallMm: number;
   uvIndex: number;
