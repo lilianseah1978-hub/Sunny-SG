@@ -1,0 +1,6 @@
+{
+  "name": "Sunny SG Day Planner",
+  "description": "Real-time, weather-aware, and transport-aware Singapore itinerary generator with live NEA weather, public transit integration, and ticket discovery.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
