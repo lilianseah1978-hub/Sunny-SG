@@ -433,24 +433,24 @@ app.get('/api/weather', async (req, res) => {
     if (psiRes.status === 'fulfilled' && psiRes.value.ok) {
       try {
         const psiJson = await psiRes.value.json();
-        const readings = psiJson?.data?.items?.[0]?.readings;
+        const readings = psiJson?.data?.items?.[0]?.readings || psiJson?.data?.records?.[0]?.readings;
         if (readings) {
-          livePsi = readings.psi_twenty_four_hourly?.national || readings.psi_twenty_four_hourly?.central || 42;
-          livePm25 = readings.pm25_one_hourly?.national || readings.pm25_one_hourly?.central || 11;
+          livePsi = readings.psi_twenty_four_hourly?.central || readings.psi_twenty_four_hourly?.national || readings.psi_twenty_four_hourly?.south || 42;
+          livePm25 = readings.pm25_twenty_four_hourly?.central || readings.pm25_twenty_four_hourly?.national || readings.pm25_one_hourly?.central || 11;
         }
       } catch {
         // continue
       }
     }
 
-    // 6. Process Live UV Index
+    // 6. Process Live UV Index (latest reading is at index 0 in Data.gov.sg v2 records)
     let liveUvIndex = liveTemp > 31 ? 8 : 6;
     if (uvRes.status === 'fulfilled' && uvRes.value.ok) {
       try {
         const uvJson = await uvRes.value.json();
         const records = uvJson?.data?.records?.[0]?.index || uvJson?.data?.items?.[0]?.index;
         if (Array.isArray(records) && records.length > 0) {
-          const latest = records[records.length - 1];
+          const latest = records[0];
           if (latest && typeof latest.value === 'number') {
             liveUvIndex = latest.value;
           }
@@ -460,8 +460,27 @@ app.get('/api/weather', async (req, res) => {
       }
     }
 
-    const matchedWeather = MOCK_LIVE_WEATHER[areaQuery] || MOCK_LIVE_WEATHER['Marina Bay'];
-    const currentForecast = liveForecasts[areaQuery] || liveForecasts['City'] || matchedWeather.forecast;
+    // Map UI district names to Data.gov.sg NEA area names
+    const areaMapping: Record<string, string[]> = {
+      'Marina Bay': ['City', 'Marina Bay', 'Bukit Merah'],
+      'Sentosa': ['Sentosa', 'Southern Islands', 'Queenstown'],
+      'Civic District': ['City', 'Kallang'],
+      'Orchard': ['Tanglin', 'Novena', 'City'],
+      'Mandai': ['Mandai', 'Central Water Catchment', 'Woodlands'],
+      'Changi': ['Changi', 'Tampines', 'Bedok']
+    };
+
+    const targetAreas = areaMapping[areaQuery] || [areaQuery, 'City'];
+    let currentForecast = '';
+    for (const key of targetAreas) {
+      if (liveForecasts[key]) {
+        currentForecast = liveForecasts[key];
+        break;
+      }
+    }
+    if (!currentForecast) {
+      currentForecast = liveForecasts['City'] || MOCK_LIVE_WEATHER[areaQuery]?.forecast || 'Partly Cloudy';
+    }
 
     const isRain = /rain|shower|thundery/i.test(currentForecast) || liveRainfallMm > 0.5;
     const rainRisk = isRain ? 'heavy' : (/cloud|overcast/i.test(currentForecast) ? 'moderate' : 'low');
@@ -481,13 +500,54 @@ app.get('/api/weather', async (req, res) => {
       rainRisk,
       icon: isRain ? 'cloud-rain' : (currentForecast.includes('Cloud') ? 'sun-cloud' : 'sun'),
       allAreas: {
-        ...MOCK_LIVE_WEATHER,
-        ...(Object.keys(liveForecasts).length > 0 ? {
-          'Marina Bay': { ...MOCK_LIVE_WEATHER['Marina Bay'], forecast: liveForecasts['City'] || liveForecasts['Marina Bay'] || 'Partly Cloudy' },
-          'Sentosa': { ...MOCK_LIVE_WEATHER['Sentosa'], forecast: liveForecasts['Southern Islands'] || 'Sunny' },
-          'Mandai': { ...MOCK_LIVE_WEATHER['Mandai'], forecast: liveForecasts['Central Water Catchment'] || 'Passing Showers' },
-          'Changi': { ...MOCK_LIVE_WEATHER['Changi'], forecast: liveForecasts['Changi'] || 'Fair' }
-        } : {})
+        'Marina Bay': {
+          ...MOCK_LIVE_WEATHER['Marina Bay'],
+          forecast: liveForecasts['City'] || 'Partly Cloudy',
+          temperature: liveTemp,
+          rainfallMm: liveRainfallMm,
+          uvIndex: liveUvIndex,
+          psi: livePsi
+        },
+        'Sentosa': {
+          ...MOCK_LIVE_WEATHER['Sentosa'],
+          forecast: liveForecasts['Sentosa'] || liveForecasts['Southern Islands'] || 'Sunny & Breeze',
+          temperature: Math.round((liveTemp + 0.3) * 10) / 10,
+          rainfallMm: liveRainfallMm,
+          uvIndex: liveUvIndex,
+          psi: livePsi
+        },
+        'Civic District': {
+          ...MOCK_LIVE_WEATHER['Civic District'],
+          forecast: liveForecasts['City'] || 'Partly Cloudy',
+          temperature: liveTemp,
+          rainfallMm: liveRainfallMm,
+          uvIndex: liveUvIndex,
+          psi: livePsi
+        },
+        'Orchard': {
+          ...MOCK_LIVE_WEATHER['Orchard'],
+          forecast: liveForecasts['Tanglin'] || liveForecasts['Novena'] || 'Passing Clouds',
+          temperature: Math.round((liveTemp - 0.2) * 10) / 10,
+          rainfallMm: liveRainfallMm,
+          uvIndex: liveUvIndex,
+          psi: livePsi
+        },
+        'Mandai': {
+          ...MOCK_LIVE_WEATHER['Mandai'],
+          forecast: liveForecasts['Mandai'] || liveForecasts['Central Water Catchment'] || 'Humid & Overcast',
+          temperature: Math.round((liveTemp - 0.8) * 10) / 10,
+          rainfallMm: liveRainfallMm > 0 ? liveRainfallMm : 0.2,
+          uvIndex: Math.max(1, liveUvIndex - 1),
+          psi: Math.max(10, livePsi - 4)
+        },
+        'Changi': {
+          ...MOCK_LIVE_WEATHER['Changi'],
+          forecast: liveForecasts['Changi'] || liveForecasts['Tampines'] || 'Fair & Sunny',
+          temperature: Math.round((liveTemp + 0.2) * 10) / 10,
+          rainfallMm: liveRainfallMm,
+          uvIndex: liveUvIndex,
+          psi: livePsi
+        }
       },
       updatedAt: new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' })
     };
