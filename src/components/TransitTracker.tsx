@@ -349,19 +349,33 @@ export function TransitTracker() {
 
             {/* Bus Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {busData?.services?.map((svc) => {
-                const nextEta = svc.nextBus.etaMinutes;
+              {busData?.services?.map((svc: any) => {
+                const serviceNumber = svc.serviceNo || svc.ServiceNo || 'Bus';
+                const nextBusObj = svc.nextBus || svc.NextBus || {};
+                const nextBus2Obj = svc.nextBus2 || svc.NextBus2;
+                
+                const nextEta = typeof nextBusObj.etaMinutes === 'number' 
+                  ? nextBusObj.etaMinutes 
+                  : (nextBusObj.EstimatedArrival ? Math.max(0, Math.round((new Date(nextBusObj.EstimatedArrival).getTime() - Date.now()) / 60000)) : 3);
+                
+                const nextEta2 = nextBus2Obj 
+                  ? (typeof nextBus2Obj.etaMinutes === 'number' ? nextBus2Obj.etaMinutes : (nextBus2Obj.EstimatedArrival ? Math.max(0, Math.round((new Date(nextBus2Obj.EstimatedArrival).getTime() - Date.now()) / 60000)) : 10))
+                  : null;
+
                 const isArriving = nextEta <= 1;
+                const loadCode = nextBusObj.load || nextBusObj.Load || 'SEA';
+                const loadLabel = nextBusObj.loadLabel || (loadCode === 'SEA' ? 'Seats Available' : loadCode === 'SDA' ? 'Standing Available' : 'Limited Standing');
+                const busType = nextBusObj.type || nextBusObj.Type || 'SD';
 
                 return (
                   <div
-                    key={svc.serviceNo}
+                    key={serviceNumber}
                     className="bg-slate-50 hover:bg-slate-100/70 rounded-xl border border-slate-200/80 p-3.5 transition-all"
                   >
                     <div className="flex items-center justify-between">
                       {/* Bus Number Pill */}
                       <span className="bg-slate-900 text-white font-mono font-bold text-lg px-2.5 py-0.5 rounded-lg shadow-xs">
-                        {svc.serviceNo}
+                        {serviceNumber}
                       </span>
 
                       {/* Primary ETA Badge */}
@@ -372,7 +386,7 @@ export function TransitTracker() {
                           {isArriving ? 'Arriving Now' : `${nextEta} min`}
                         </span>
                         <span className="text-[10px] text-slate-500 block">
-                          Next: {svc.nextBus2 ? `${svc.nextBus2.etaMinutes} min` : 'Scheduled'}
+                          Next: {nextEta2 !== null ? `${nextEta2} min` : 'Scheduled'}
                         </span>
                       </div>
                     </div>
@@ -381,19 +395,19 @@ export function TransitTracker() {
                     <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full ${
-                          svc.nextBus.load === 'SEA'
+                          loadCode === 'SEA'
                             ? 'bg-emerald-500'
-                            : svc.nextBus.load === 'SDA'
+                            : loadCode === 'SDA'
                             ? 'bg-amber-500'
                             : 'bg-rose-500'
                         }`} />
                         <span className="font-medium text-slate-700 text-[11px]">
-                          {svc.nextBus.loadLabel}
+                          {loadLabel}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2 text-slate-500 text-[10px] font-semibold">
-                        {svc.nextBus.type === 'DD' && (
+                        {busType === 'DD' && (
                           <span className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-mono">
                             Double Decker
                           </span>

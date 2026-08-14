@@ -61,9 +61,23 @@ async function getOneMapToken(): Promise<string | null> {
       const token = data.access_token || data.token;
       if (token) {
         // Cache for ~3 days minus 2 hours buffer
-        const expiryTime = data.expiry_timestamp
-          ? new Date(data.expiry_timestamp).getTime()
-          : now + (3 * 24 * 60 * 60 * 1000) - (2 * 60 * 60 * 1000);
+        let expiryTime = now + (3 * 24 * 60 * 60 * 1000) - (2 * 60 * 60 * 1000);
+        if (data.expiry_timestamp) {
+          const rawExp = data.expiry_timestamp;
+          if (typeof rawExp === 'number') {
+            expiryTime = rawExp > 10000000000 ? rawExp : rawExp * 1000;
+          } else if (typeof rawExp === 'string') {
+            const num = Number(rawExp);
+            if (!isNaN(num) && num > 0) {
+              expiryTime = num > 10000000000 ? num : num * 1000;
+            } else {
+              const parsed = new Date(rawExp).getTime();
+              if (!isNaN(parsed)) {
+                expiryTime = parsed;
+              }
+            }
+          }
+        }
 
         oneMapTokenCache = {
           token,
@@ -565,22 +579,6 @@ app.get('/api/transit/bus', async (req, res) => {
   const busStopCode = (req.query.busStopCode as string) || '03071';
   const ltaKey = process.env.LTA_DATAMALL_API_KEY;
 
-  if (ltaKey) {
-    try {
-      const response = await fetch(`https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${busStopCode}`, {
-        headers: { 'AccountKey': ltaKey, 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(4000)
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return res.json({ source: 'LTA_DATAMALL_LIVE', busStopCode, services: data.Services });
-      }
-    } catch {
-      // Fallback below
-    }
-  }
-
-  // Dynamic high-fidelity simulated arrival data matching Singapore LTA feed schema
   const matchedStop = POPULAR_BUS_STOPS.find(s => s.code === busStopCode) || {
     code: busStopCode,
     name: `Bus Stop (${busStopCode})`,
@@ -589,16 +587,77 @@ app.get('/api/transit/bus', async (req, res) => {
     landmark: 'Central District'
   };
 
+  const loadLabels: Record<string, string> = {
+    SEA: 'Seats Available',
+    SDA: 'Standing Available',
+    LSD: 'Limited Standing'
+  };
+
+  if (ltaKey) {
+    try {
+      const response = await fetch(`https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${busStopCode}`, {
+        headers: { 'AccountKey': ltaKey, 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const rawServices = data.Services || [];
+
+        const nowMs = Date.now();
+        const parsedServices = rawServices.map((svc: any) => {
+          const parseBus = (bus: any) => {
+            if (!bus || !bus.EstimatedArrival) return null;
+            const arrMs = new Date(bus.EstimatedArrival).getTime();
+            const diffMin = isNaN(arrMs) ? 0 : Math.max(0, Math.round((arrMs - nowMs) / 60000));
+            const loadCode = bus.Load || 'SEA';
+            return {
+              estimatedArrival: bus.EstimatedArrival,
+              etaMinutes: diffMin,
+              load: loadCode,
+              loadLabel: loadLabels[loadCode] || 'Seats Available',
+              feature: bus.Feature || 'WAB',
+              type: bus.Type || 'SD'
+            };
+          };
+
+          const nextBus = parseBus(svc.NextBus) || {
+            estimatedArrival: new Date(nowMs + 3 * 60000).toISOString(),
+            etaMinutes: 3,
+            load: 'SEA' as const,
+            loadLabel: 'Seats Available',
+            feature: 'WAB' as const,
+            type: 'SD' as const
+          };
+
+          return {
+            serviceNo: svc.ServiceNo,
+            operator: svc.Operator,
+            nextBus,
+            nextBus2: parseBus(svc.NextBus2) || undefined,
+            nextBus3: parseBus(svc.NextBus3) || undefined
+          };
+        });
+
+        return res.json({
+          source: 'LTA_DATAMALL_LIVE',
+          busStopCode,
+          roadName: matchedStop.road,
+          description: matchedStop.name,
+          landmark: matchedStop.landmark,
+          services: parsedServices
+        });
+      }
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Dynamic high-fidelity simulated arrival data matching Singapore LTA feed schema
   const services = matchedStop.services.map(serviceNo => {
     const min1 = Math.floor(Math.random() * 5) + 1;
     const min2 = min1 + Math.floor(Math.random() * 8) + 6;
     const min3 = min2 + Math.floor(Math.random() * 10) + 10;
     const loads: ('SEA' | 'SDA' | 'LSD')[] = ['SEA', 'SEA', 'SDA', 'LSD'];
-    const loadLabels: Record<string, string> = {
-      SEA: 'Seats Available',
-      SDA: 'Standing Available',
-      LSD: 'Limited Standing'
-    };
     const types: ('SD' | 'DD' | 'BD')[] = ['DD', 'DD', 'SD'];
 
     const curLoad = loads[Math.floor(Math.random() * loads.length)];
